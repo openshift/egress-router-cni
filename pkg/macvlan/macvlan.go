@@ -1,4 +1,4 @@
-package main
+package macvlan
 
 import (
 	"encoding/json"
@@ -10,10 +10,8 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/j-keck/arping"
@@ -444,21 +442,17 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 	return macvlan, nil
 }
 
-func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("egress-router"))
-}
-
-func cmdCheck(args *skel.CmdArgs) error {
+func CmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
+func CmdAdd(args *skel.CmdArgs) error {
 	macvlanCmdAdd(args)
 
 	return nil
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+func CmdDel(args *skel.CmdArgs) error {
 	macvlanCmdDel(args)
 
 	return nil
