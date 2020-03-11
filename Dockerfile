@@ -1,7 +1,7 @@
 FROM golang:1.12 as builder
-WORKDIR /go/src/github.com/rcarrillocruz/egress-router
+WORKDIR /go/src/github.com/openshift/egress-router
 COPY . .
-RUN go build -o /go/bin/egress-router ./plugin/main.go
+RUN go build -o /go/bin/egress-router ./pkg/main.go
 
 FROM openshift/origin-base
 
