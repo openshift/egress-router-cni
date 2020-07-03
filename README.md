@@ -85,3 +85,4 @@ The value of `ipConfig` must include at least the name (and optionally the names
 ## Routing
 
 The newly-created interface will be made the default route for the pod (with the existing default route being removed). However, the previously-default interface will still be used as the route to the cluster and service networks. Additional routes may also be added as needed. For instance, when using `macvlan`, a route will be added to the master's IP via the pod network, since it would not be accessible via the macvlan interface.
+
