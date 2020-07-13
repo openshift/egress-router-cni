@@ -226,7 +226,7 @@ func loadIPConfig(ipc *IPConfig, podNamespace string) (*IP, map[string]IP, error
 
 	cm, err := clientset.CoreV1().ConfigMaps(ipc.Namespace).Get(ipc.Name, metav1.GetOptions{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get ConfigMap on namespace %s with name %s: %v", ipc.Namespace, ipc.Name)
+		return nil, nil, fmt.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
 	}
 
 	if cm.Data["ip"] != "" {
@@ -385,7 +385,7 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 
 	mtu, err := strconv.Atoi(conf.InterfaceArgs["mtu"])
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert MTU %q to integer: %v")
+		return nil, fmt.Errorf("failed to convert MTU to integer: %v", conf.InterfaceArgs["mtu"])
 	}
 
 	// due to kernel bug we have to create with tmpName or it might
