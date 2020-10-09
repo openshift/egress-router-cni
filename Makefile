@@ -7,7 +7,7 @@ unexport GOPATH
 
 GO_BUILD_BINDIR = _output
 GO_BUILD_PACKAGES = \
-    ./cmd/... 
+    ./cmd/...
 GO_BUILD_PACKAGES_EXPANDED =$(shell GO111MODULE=on $(GO) list $(GO_MOD_FLAGS) $(GO_BUILD_PACKAGES))
 
 # Include the library makefile
@@ -26,3 +26,8 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 # It will generate target "image-$(1)" for builing the image and binding it as a prerequisite to target "images".
 
 $(call build-image,egress-router,egress-router,./images/egress-router/Dockerfile,.)
+
+build-image-egress-router-test:
+	podman build --no-cache -f images/egress-router/Dockerfile -t egress-router-test .
+
+.PHONY: build-image-egress-router-test
