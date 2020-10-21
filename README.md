@@ -70,8 +70,6 @@ Exactly one of `ip`, `podIP`, or `ipConfig` must be provided.
 
 On bare-metal nodes, `macvlan` and `ipvlan` are supported for `interfaceType`, with `macvlan` being the default. For `macvlan`, `interfaceArgs` can include `mode` and `master`, and for `ipvlan` it can include `master`. However, you do not need to specify `master` if it can be inferred from the IP address. (That is, if there is exactly 1 network interface on the node whose configured IP is in the same CIDR range as the pod's configured IP, then that interface will automatically be used as the `master`, and the associated gateway will automatically be used as the `gateway`.)
 
-On AWS, the default `interfaceType` is `aws-elastic-ip`. The administrator is responsible for allocating the Elastic IP address (and for deallocating it when it is no longer needed). The plugin will handle associating the Elastic IP with the node hosting the pod (and moving it to another node if the pod moves).
-
 ## IP Configuration
 
 The configuration must specify exactly one of `ip`, `podIP`, or `ipConfig`. The first two forms configure IP addresses staticly in the network definition, while `ipConfig` allows dynamic configuration.
