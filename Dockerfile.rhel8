@@ -4,6 +4,7 @@ WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV CGO_ENABLED=1
 ENV VERSION=rhel8 COMMIT=unset
+ENV OPERATOR_NAME=cluster-network-operator
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
 FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7
@@ -12,4 +13,5 @@ COPY --from=builder /go/src/github.com/openshift/egress-router-cni/bin/egress-ro
 LABEL io.k8s.display-name="Egress Router CNI" \
       io.k8s.description="CNI Plugin for Egress Router" \
       io.openshift.tags="openshift" \
+      io.openshift.release.operator=true \
       maintainer="Daniel Mellado <dmellado@redhat.com>"
