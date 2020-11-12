@@ -6,7 +6,7 @@ ENV CGO_ENABLED=1
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
-FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-base-openshift-4.7
+FROM registry.svc.ci.openshift.org/ocp/4.7:base
 RUN mkdir -p /usr/src/egress-router-cni/bin/
 COPY --from=builder /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
 LABEL io.k8s.display-name="Egress Router CNI" \
