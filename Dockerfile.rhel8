@@ -2,7 +2,6 @@ FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.7 
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
-ENV CGO_ENABLED=1
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
