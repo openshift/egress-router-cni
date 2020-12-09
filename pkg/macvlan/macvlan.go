@@ -333,9 +333,15 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return fmt.Errorf("failed to get IPTables: %v", err)
 		}
-		ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
-		ipt.Append("nat", "POSTROUTING", "-o", args.IfName, "-j", "SNAT", "--to-source", ip.String())
 
+		err = ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
+		if err != nil {
+			return fmt.Errorf("failed to apply iptables rule: %v", err)
+		}
+		err = ipt.Append("nat", "POSTROUTING", "-o", args.IfName, "-j", "SNAT", "--to-source", ip.String())
+		if err != nil {
+			return fmt.Errorf("failed to apply iptables rule: %v", err)
+		}
 		return nil
 	})
 	if err != nil {
