@@ -1,1 +1,28 @@
 bin/
+
+# Gitgnore for hugo docs
+docs/*.o
+docs/*.a
+docs/*.so
+
+# Folders
+docs/_obj
+docs/_test
+
+# Architecture specific extensions/prefixes
+docs/*.[568vq]
+docs/[568vq].out
+
+docs/*.cgo1.go
+docs/*.cgo2.c
+docs/_cgo_defun.c
+docs/_cgo_gotypes.go
+docs/_cgo_export.*
+
+docs/_testmain.go
+
+docs/*.exe
+docs/*.test
+
+docs/public
+docs/.DS_Store
