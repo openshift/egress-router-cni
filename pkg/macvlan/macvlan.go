@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -19,6 +19,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/openshift/egress-router-cni/pkg/logging"
+	"github.com/openshift/egress-router-cni/pkg/types"
 )
 
 const (
@@ -26,37 +29,10 @@ const (
 	DisableIPv6SysctlTemplate           = "net.ipv6.conf.%s.disable_ipv6"
 )
 
-type ClusterConf struct {
-	CloudProvider string `json:"cloudProvider"`
-}
-
-type NetConf struct {
-	types.NetConf
-
-	InterfaceType string            `json:"interfaceType"`
-	InterfaceArgs map[string]string `json:"interfaceArgs"`
-
-	IP       *IP           `json:"ip"`
-	PodIP    map[string]IP `json:"podIP"`
-	IPConfig *IPConfig     `json:"ipConfig"`
-}
-
-type IP struct {
-	Addresses    []string `json:"addresses"`
-	Gateway      string   `json:"gateway"`
-	Destinations []string `json:"destinations"`
-}
-
-type IPConfig struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Overrides *IP    `json:"overrides"`
-}
-
-func loadNetConf(cluster *ClusterConf, bytes []byte) (*NetConf, error) {
-	conf := &NetConf{}
+func loadNetConf(cluster *types.ClusterConf, bytes []byte) (*types.NetConf, error) {
+	conf := &types.NetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
-		return nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, logging.Errorf("failed to load netconf: %v", err)
 	}
 	if err := fillNetConfDefaults(conf, cluster); err != nil {
 		return nil, err
@@ -69,15 +45,18 @@ func loadNetConf(cluster *ClusterConf, bytes []byte) (*NetConf, error) {
 // applies to the ifName interface
 func configureIface(ifName string, res *current.Result) error {
 	if len(res.Interfaces) == 0 {
+		logging.Errorf("no interfaces to configure")
 		return fmt.Errorf("no interfaces to configure")
 	}
 
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
+		logging.Errorf("failed to lookup %q: %v", ifName, err)
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}
 
 	if err := netlink.LinkSetUp(link); err != nil {
+		logging.Errorf("failed to set %q UP: %v", ifName, err)
 		return fmt.Errorf("failed to set %q UP: %v", ifName, err)
 	}
 
@@ -90,6 +69,7 @@ func configureIface(ifName string, res *current.Result) error {
 		intIdx := *ipc.Interface
 		if intIdx < 0 || intIdx >= len(res.Interfaces) || res.Interfaces[intIdx].Name != ifName {
 			// IP address is for a different interface
+			logging.Errorf("failed to add IP addr %v to %q: invalid interface index", ipc, ifName)
 			return fmt.Errorf("failed to add IP addr %v to %q: invalid interface index", ipc, ifName)
 		}
 
@@ -104,13 +84,14 @@ func configureIface(ifName string, res *current.Result) error {
 				// Read current sysctl value
 				value, err := sysctl.Sysctl(ipv6SysctlValueName)
 				if err != nil || value == "0" {
-					// FIXME: log warning if unable to read sysctl value
+					logging.Errorf("Unable to read sysctl value")
 					continue
 				}
 
 				// Write sysctl to enable IPv6
 				_, err = sysctl.Sysctl(ipv6SysctlValueName, "0")
 				if err != nil {
+					logging.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
 					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
 				}
 			}
@@ -119,6 +100,7 @@ func configureIface(ifName string, res *current.Result) error {
 
 		addr := &netlink.Addr{IPNet: &ipc.Address, Label: ""}
 		if err = netlink.AddrAdd(link, addr); err != nil {
+			logging.Errorf("failed to add IP addr %v to %q: %v", ipc, ifName, err)
 			return fmt.Errorf("failed to add IP addr %v to %q: %v", ipc, ifName, err)
 		}
 
@@ -147,6 +129,7 @@ func configureIface(ifName string, res *current.Result) error {
 		if err = ip.AddRoute(&r.Dst, gw, link); err != nil {
 			// we skip over duplicate routes as we assume the first one wins
 			if !os.IsExist(err) {
+				logging.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
 				return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
 			}
 		}
@@ -170,15 +153,22 @@ func getDefaultRouteInterfaceName() (string, error) {
 			return l.Attrs().Name, nil
 		}
 	}
-
+	logging.Errorf("no default route interface found")
 	return "", fmt.Errorf("no default route interface found")
 }
 
-func fillNetConfDefaults(conf *NetConf, cluster *ClusterConf) error {
+func fillNetConfDefaults(conf *types.NetConf, cluster *types.ClusterConf) error {
+	if conf.LogFile != "" {
+		logging.SetLogFile(conf.LogFile)
+	}
+	if conf.LogLevel != "" {
+		logging.SetLogLevel(conf.LogLevel)
+	}
 	if conf.InterfaceType == "" {
 		if cluster.CloudProvider == "" {
 			conf.InterfaceType = "macvlan"
 		} else {
+			logging.Errorf("must specify explicit interfaceType for cloud provider %q", cluster.CloudProvider)
 			return fmt.Errorf("must specify explicit interfaceType for cloud provider %q", cluster.CloudProvider)
 		}
 	}
@@ -188,6 +178,7 @@ func fillNetConfDefaults(conf *NetConf, cluster *ClusterConf) error {
 		if conf.InterfaceArgs["master"] == "" {
 			defaultRouteInterface, err := getDefaultRouteInterfaceName()
 			if err != nil {
+				logging.Errorf("unable to get default route interface name: %v", err)
 				return fmt.Errorf("unable to get default route interface name: %v", err)
 			}
 			if conf.InterfaceArgs == nil {
@@ -201,6 +192,7 @@ func fillNetConfDefaults(conf *NetConf, cluster *ClusterConf) error {
 		if conf.InterfaceArgs["mtu"] == "" {
 			mtu, err := getMTUByName(conf.InterfaceArgs["master"])
 			if err != nil {
+				logging.Errorf("unable to get MTU on master interface: %v", err)
 				return fmt.Errorf("unable to get MTU on master interface: %v", err)
 			}
 			conf.InterfaceArgs["mtu"] = strconv.Itoa(mtu)
@@ -210,37 +202,43 @@ func fillNetConfDefaults(conf *NetConf, cluster *ClusterConf) error {
 	return nil
 }
 
-func loadIPConfig(ipc *IPConfig, podNamespace string) (*IP, map[string]IP, error) {
+func loadIPConfig(ipc *types.IPConfig, podNamespace string) (*types.IP, map[string]types.IP, error) {
 	if ipc.Namespace == "" {
 		ipc.Namespace = podNamespace
 	}
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
+		logging.Errorf("failed to get in-cluster config")
 		return nil, nil, fmt.Errorf("failed to get in-cluster config")
 	}
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
+		logging.Errorf("failed to get Kubernetes clientset")
 		return nil, nil, fmt.Errorf("failed to get Kubernetes clientset")
 	}
 
 	cm, err := clientset.CoreV1().ConfigMaps(ipc.Namespace).Get(ipc.Name, metav1.GetOptions{})
 	if err != nil {
+		logging.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
 		return nil, nil, fmt.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
 	}
 
 	if cm.Data["ip"] != "" {
 		if cm.Data["podIP"] != "" {
+			logging.Errorf("ConfigMap %s/%s contains both 'ip' and 'podIP'", ipc.Namespace, ipc.Name)
 			return nil, nil, fmt.Errorf("ConfigMap %s/%s contains both 'ip' and 'podIP'", ipc.Namespace, ipc.Name)
 		}
-		ip := &IP{}
+		ip := &types.IP{}
 		if err := json.Unmarshal([]byte(cm.Data["ip"]), ip); err != nil {
+			logging.Errorf("failed to parse 'ip' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 			return nil, nil, fmt.Errorf("failed to parse 'ip' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 		}
 		return ip, nil, nil
 	} else if cm.Data["podIP"] != "" {
-		podIP := map[string]IP{}
+		podIP := map[string]types.IP{}
 		if err := json.Unmarshal([]byte(cm.Data["podIP"]), podIP); err != nil {
+			logging.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 			return nil, nil, fmt.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 		}
 		return nil, podIP, nil
@@ -253,14 +251,17 @@ func macvlanCmdDel(args *skel.CmdArgs) error {
 	if args.Netns == "" {
 		return nil
 	}
+	logging.Debugf("Called CNI DEL")
 
 	// There is a netns so try to clean up. Delete can be called multiple times
 	// so don't return an error if the device is already removed.
 	err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		if err := ip.DelLinkByName(args.IfName); err != nil {
 			if err != ip.ErrLinkNotFound {
+				logging.Errorf("CNI DEL failed, link not found: %s", err)
 				return err
 			}
+			logging.Debugf("CNI DEL called")
 		}
 		return nil
 	})
@@ -269,10 +270,14 @@ func macvlanCmdDel(args *skel.CmdArgs) error {
 }
 
 func macvlanCmdAdd(args *skel.CmdArgs) error {
-	n, err := loadNetConf(&ClusterConf{}, args.StdinData)
+	n, err := loadNetConf(&types.ClusterConf{}, args.StdinData)
+	logging.Debugf("Called CNI ADD")
 	if err != nil {
 		return err
 	}
+	logging.Debugf("Gateway: %s", n.IP.Gateway)
+	logging.Debugf("IP Source Addresses: %s", n.IP.Addresses)
+	logging.Debugf("IP Destinations: %s", n.IP.Destinations)
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
@@ -296,6 +301,7 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 
 	ip, ipnet, err := net.ParseCIDR(n.IP.Addresses[0])
 	if err != nil {
+		logging.Errorf("unable to parse IP address %q: %v", n.IP.Addresses[0], err)
 		return fmt.Errorf("unable to parse IP address %q: %v", n.IP.Addresses[0], err)
 	}
 	gw := net.ParseIP(n.IP.Gateway)
@@ -331,10 +337,13 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 
 		ipt, err := iptables.New()
 		if err != nil {
+			logging.Errorf("failed to get IPTables: %v", err)
 			return fmt.Errorf("failed to get IPTables: %v", err)
 		}
 		ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
+		logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
 		ipt.Append("nat", "POSTROUTING", "-o", args.IfName, "-j", "SNAT", "--to-source", ip.String())
+		logging.Debugf("Added iptables rule: iptables -t nat -o %s -j SNAT --to-source %s", args.IfName, ip.String())
 
 		return nil
 	})
@@ -344,12 +353,13 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 
 	result.DNS = n.DNS
 
-	return types.PrintResult(result, n.CNIVersion)
+	return cnitypes.PrintResult(result, n.CNIVersion)
 }
 
 func getMTUByName(ifName string) (int, error) {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
+		logging.Errorf("Failed to get MTU on link: %v", err)
 		return 0, err
 	}
 	return link.Attrs().MTU, nil
@@ -370,7 +380,7 @@ func modeFromString(s string) (netlink.MacvlanMode, error) {
 	}
 }
 
-func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
+func createMacvlan(conf *types.NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
 	macvlan := &current.Interface{}
 
 	mode, err := modeFromString(conf.InterfaceArgs["mode"])
@@ -406,8 +416,10 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 	}
 
 	if err := netlink.LinkAdd(mv); err != nil {
+		logging.Errorf("failed to create macvlan: %v", err)
 		return nil, fmt.Errorf("failed to create macvlan: %v", err)
 	}
+	logging.Debugf("Created macvlan interface")
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		// TODO: duplicate following lines for ipv6 support, when it will be added in other places
@@ -421,13 +433,16 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		err := ip.RenameLink(tmpName, ifName)
 		if err != nil {
 			_ = netlink.LinkDel(mv)
+			logging.Errorf("failed to rename macvlan to %q: %v", ifName, err)
 			return fmt.Errorf("failed to rename macvlan to %q: %v", ifName, err)
 		}
+		logging.Debugf("Renamed macvlan to %q", ifName)
 		macvlan.Name = ifName
 
 		// Re-fetch macvlan to get all properties/attributes
 		contMacvlan, err := netlink.LinkByName(ifName)
 		if err != nil {
+			logging.Errorf("failed to refetch macvlan %q: %v", ifName, err)
 			return fmt.Errorf("failed to refetch macvlan %q: %v", ifName, err)
 		}
 		macvlan.Mac = contMacvlan.Attrs().HardwareAddr.String()
