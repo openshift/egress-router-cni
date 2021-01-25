@@ -3,6 +3,7 @@ package macvlan
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/egress-router-cni/pkg/util"
 	"net"
 	"os"
 	"strconv"
@@ -140,14 +141,14 @@ func configureIface(ifName string, res *current.Result) error {
 }
 
 func getDefaultRouteInterfaceName() (string, error) {
-	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	routeToDstIP, err := util.GetNetLinkOps().RouteListFiltered(netlink.FAMILY_ALL, nil, netlink.RT_FILTER_OIF)
 	if err != nil {
 		return "", err
 	}
 
 	for _, v := range routeToDstIP {
 		if v.Dst == nil {
-			l, err := netlink.LinkByIndex(v.LinkIndex)
+			l, err := util.GetNetLinkOps().LinkByIndex(v.LinkIndex)
 			if err != nil {
 				return "", err
 			}
@@ -414,7 +415,7 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 }
 
 func getMTUByName(ifName string) (int, error) {
-	link, err := netlink.LinkByName(ifName)
+	link, err := util.GetNetLinkOps().LinkByName(ifName)
 	if err != nil {
 		logging.Errorf("Failed to get MTU on link: %v", err)
 		return 0, err
