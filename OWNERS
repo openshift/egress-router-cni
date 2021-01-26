@@ -1,17 +1,25 @@
 reviewers:
   - alexanderConstantinescu
+  - astoycos
+  - danielmellado
   - danwinship
   - dcbw
-  - JacobTanenbaum
+  - jluhrsen
   - juanluisvaladas
   - rcarrillocruz
   - squeed
-  - danielmellado
+  - trozet
+  - tssurya
+  - vjayaramrh
+  - vpickard
+  - weliang1
 approvers:
+  - danielmellado
   - danwinship
   - dcbw
   - knobunc
   - rcarrillocruz
   - squeed
-  - danielmellado
+  - trozet
+  - tssurya
 component: "Networking"
