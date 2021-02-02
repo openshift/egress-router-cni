@@ -145,6 +145,7 @@ func getDefaultRouteInterfaceName() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	logging.Debugf("routeToDstIP %v", routeToDstIP)
 
 	for _, v := range routeToDstIP {
 		if v.Dst == nil {
@@ -152,10 +153,11 @@ func getDefaultRouteInterfaceName() (string, error) {
 			if err != nil {
 				return "", err
 			}
+			logging.Debugf("Using default route interface %v", l.Attrs().Name)
 			return l.Attrs().Name, nil
 		}
 	}
-	logging.Errorf("no default route interface found")
+	logging.Errorf("no default route interface found: %v", err)
 	return "", fmt.Errorf("no default route interface found")
 }
 
