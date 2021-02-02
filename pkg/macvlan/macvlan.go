@@ -126,6 +126,7 @@ func configureIface(ifName string, res *current.Result) error {
 				gw = v6gw
 			}
 		}
+
 		if err = ip.AddRoute(&r.Dst, gw, link); err != nil {
 			// we skip over duplicate routes as we assume the first one wins
 			if !os.IsExist(err) {
@@ -320,9 +321,66 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
+		// Configure interfaces IPAM
 		if err := configureIface(args.IfName, result); err != nil {
 			return err
 		}
+
+		// Get macvlan interface
+		macvlanLink, err := netlink.LinkByName(args.IfName)
+		if err != nil {
+			logging.Errorf("could not get interface: %v", err)
+			return fmt.Errorf("could not get interface: %v", err)
+		}
+
+		// Add route to gateway on macvlan interface
+		destIpNet := net.IPNet{
+			IP:   gw,
+			Mask: net.CIDRMask(32, 32),
+		}
+
+		newGatewayRoute := netlink.Route{
+			LinkIndex: macvlanLink.Attrs().Index,
+			Dst:       &destIpNet,
+		}
+		logging.Debugf("Adding route to gateway %s on macvlan interface", gw)
+
+		if err := netlink.RouteAdd(&newGatewayRoute); err != nil {
+			logging.Errorf("failed to add new gateway default route : %v", err)
+			return fmt.Errorf("failed to add new gateway default route : %v", err)
+		}
+
+		// Get default interface
+		existingLink, err := netlink.LinkByName("eth0")
+		if err != nil {
+			logging.Errorf("couldn't get interface eth0: %v", err)
+			return fmt.Errorf("couldn't get interface eth0: %v", err)
+		}
+
+		// Delete default route
+		routes, _ := netlink.RouteList(existingLink, netlink.FAMILY_V4)
+		for _, r := range routes {
+			if r.Dst == nil {
+				if err := netlink.RouteDel(&r); err != nil {
+					logging.Errorf("failed to delete existing default route : %v", err)
+					return fmt.Errorf("failed to delete existing default route : %v", err)
+				}
+				logging.Debugf("deleted default route %v", r)
+			}
+		}
+
+		// Create new default route
+		newDefaultRoute := netlink.Route{
+			LinkIndex: macvlanLink.Attrs().Index,
+			Dst:       nil,
+			Gw:        gw,
+		}
+
+		if err := netlink.RouteAdd(&newDefaultRoute); err != nil {
+			logging.Errorf("failed to add new default route : %v", err)
+			return fmt.Errorf("failed to add new default route : %v", err)
+		}
+		logging.Debugf("Added new default route with gateway %v", gw)
 
 		contVeth, err := net.InterfaceByName(args.IfName)
 		if err != nil {
@@ -352,7 +410,6 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 	}
 
 	result.DNS = n.DNS
-
 	return cnitypes.PrintResult(result, n.CNIVersion)
 }
 
