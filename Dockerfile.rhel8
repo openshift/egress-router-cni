@@ -1,13 +1,23 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.7 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.7 AS rhel8
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
+FROM registry.ci.openshift.org/ocp/builder:rhel-7-golang-1.15-openshift-4.7 AS rhel7
+ADD . /go/src/github.com/openshift/egress-router-cni
+WORKDIR /go/src/github.com/openshift/egress-router-cni
+ENV GO111MODULE=on
+RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
+
 FROM registry.ci.openshift.org/ocp/4.7:base
-RUN mkdir -p /usr/src/egress-router-cni/bin/
-COPY --from=builder /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
+RUN mkdir -p /usr/src/egress-router-cni/bin/ && \
+    mkdir -p /usr/src/egress-router-cni/rhel7/bin && \
+    mkdir -p /usr/src/egress-router-cni/rhel8/bin
+COPY --from=rhel7 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel7/bin/egress-router
+COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
+COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel8/bin/egress-router
 LABEL io.k8s.display-name="Egress Router CNI" \
       io.k8s.description="CNI Plugin for Egress Router" \
       io.openshift.tags="openshift" \
