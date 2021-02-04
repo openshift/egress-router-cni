@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -270,6 +271,79 @@ func macvlanCmdDel(args *skel.CmdArgs) error {
 	return err
 }
 
+// validatePortRange validates the destination port value provided in the NAD.
+// Accepts an argument of type string and returns error if the provided port value is invalid.
+func validatePortRange(port string) error {
+	dport, err := strconv.Atoi(port)
+	if err != nil {
+		return err
+	}
+	if dport < 0 || dport > 65535 {
+		return fmt.Errorf("Port number out of range %v", port)
+	}
+	return nil
+}
+
+// generateDNATIPTablesRules creates the necessary IPTable rules to DNAT packets to remote destination.
+// Accepts an array of strings repsenting allowedDestinations to which the router can talk to.
+// Returns an error if invalid user input is detected at any point.
+func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []string) error {
+	if len(allowedDestinations) == 0 {
+		logging.Debugf("No destination information has been provided")
+		return nil
+	}
+
+	for _, allowedDestination := range allowedDestinations {
+
+		destination := strings.Split(allowedDestination, " ")
+
+		if len(destination) == 1 {
+			// should be <IPaddress/mask> format
+
+			dest, _, err := net.ParseCIDR(destination[0])
+			if err != nil {
+				logging.Errorf("Unable to parse destination IP address %v: %v", dest, err)
+				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest, err)
+			}
+
+			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
+			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
+		} else if len(destination) == 3 || len(destination) == 4 {
+			// should be <localport protocol IPaddress/mask> format
+
+			if err := validatePortRange(destination[0]); err != nil {
+				logging.Errorf("Incorrect port number provided %v: %v", destination[0], err)
+				return fmt.Errorf("Incorrect port number provided %v: %v", destination[0], err)
+			}
+
+			if !(destination[1] == "tcp" || destination[1] == "udp") {
+				logging.Errorf("Incorrect protocol provided %v", destination[1])
+				return fmt.Errorf("Incorrect protocol number provided %v", destination[1])
+			}
+
+			dest, _, err := net.ParseCIDR(destination[2])
+			if err != nil {
+				logging.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
+				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
+			}
+
+			if len(destination) == 4 && validatePortRange(destination[3]) == nil {
+				// should be <localport protocol IPaddress/mask remoteport> format
+				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
+				logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String()+":"+destination[3])
+				continue
+			}
+
+			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
+			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String())
+		} else {
+			logging.Errorf("Invalid destination provided %v", allowedDestination)
+			return fmt.Errorf("Invalid destination provided %v", allowedDestination)
+		}
+	}
+	return nil
+}
+
 func macvlanCmdAdd(args *skel.CmdArgs) error {
 	n, err := loadNetConf(&types.ClusterConf{}, args.StdinData)
 	logging.Debugf("Called CNI ADD")
@@ -278,7 +352,7 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 	}
 	logging.Debugf("Gateway: %s", n.IP.Gateway)
 	logging.Debugf("IP Source Addresses: %s", n.IP.Addresses)
-	logging.Debugf("IP Destinations: %s", n.IP.Destinations)
+	logging.Debugf("IP Destinations: %v", n.IP.Destinations)
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
@@ -306,7 +380,8 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("unable to parse IP address %q: %v", n.IP.Addresses[0], err)
 	}
 	gw := net.ParseIP(n.IP.Gateway)
-	dest, _, err := net.ParseCIDR(n.IP.Destinations[0])
+	allowedDestinations := n.IP.Destinations
+
 	// Assume L2 interface only
 	result := &current.Result{CNIVersion: n.CNIVersion, Interfaces: []*current.Interface{macvlanInterface}}
 	result.IPs = append(result.IPs, &current.IPConfig{
@@ -398,8 +473,11 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 			logging.Errorf("failed to get IPTables: %v", err)
 			return fmt.Errorf("failed to get IPTables: %v", err)
 		}
-		ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
-		logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
+
+		if err := generateDNATIPTablesRules(ipt, allowedDestinations); err != nil {
+			logging.Errorf("Invalid destination %v: %v", allowedDestinations, err)
+			return fmt.Errorf("Invalid destination %v: %v", allowedDestinations, err)
+		}
 		ipt.Append("nat", "POSTROUTING", "-o", args.IfName, "-j", "SNAT", "--to-source", ip.String())
 		logging.Debugf("Added iptables rule: iptables -t nat -o %s -j SNAT --to-source %s", args.IfName, ip.String())
 
