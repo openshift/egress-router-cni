@@ -50,17 +50,17 @@ func TestFillNetConfDefaults(t *testing.T) {
 		{
 			desc:           "missing explicit interface type when cloud provider specified",
 			inpNetConf:     &types.NetConf{},
-			inpClusterConf: &types.ClusterConf{"testProvider"},
+			inpClusterConf: &types.ClusterConf{CloudProvider: "testProvider"},
 			errMatch:       fmt.Errorf("must specify explicit interfaceType for cloud provider"),
 		},
 		{
 			desc:           "non `macvlan` interface specified",
 			inpNetConf:     &types.NetConf{InterfaceType: "nonMacVlanIface"},
-			inpClusterConf: &types.ClusterConf{"testProvider"},
-			outNetConf: 	&types.NetConf{InterfaceType: "nonMacVlanIface"},
+			inpClusterConf: &types.ClusterConf{CloudProvider: "testProvider"},
+			outNetConf:     &types.NetConf{InterfaceType: "nonMacVlanIface"},
 		},
 		{
-			desc:			"error: unable to get the default route interface name",
+			desc:           "error: unable to get the default route interface name",
 			inpNetConf:     &types.NetConf{},
 			inpClusterConf: &types.ClusterConf{},
 			errMatch:       fmt.Errorf("unable to get default route interface name"),
@@ -69,7 +69,7 @@ func TestFillNetConfDefaults(t *testing.T) {
 			},
 		},
 		{
-			desc:			"error: unable to get MTU on master interface",
+			desc:           "error: unable to get MTU on master interface",
 			inpNetConf:     &types.NetConf{},
 			inpClusterConf: &types.ClusterConf{},
 			errMatch:       fmt.Errorf("unable to get MTU on master interface"),
