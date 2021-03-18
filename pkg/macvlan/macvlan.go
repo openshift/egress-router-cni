@@ -240,7 +240,7 @@ func loadIPConfig(ipc *types.IPConfig, podNamespace string) (*types.IP, map[stri
 		return ip, nil, nil
 	} else if cm.Data["podIP"] != "" {
 		podIP := map[string]types.IP{}
-		if err := json.Unmarshal([]byte(cm.Data["podIP"]), podIP); err != nil {
+		if err := json.Unmarshal([]byte(cm.Data["podIP"]), &podIP); err != nil {
 			logging.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 			return nil, nil, fmt.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
 		}
