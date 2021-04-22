@@ -317,7 +317,7 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 				return fmt.Errorf("Incorrect port number provided %v: %v", destination[0], err)
 			}
 
-			if !(destination[1] == "tcp" || destination[1] == "udp") {
+			if !(strings.ToLower(destination[1]) == "tcp" || strings.ToLower(destination[1]) == "udp") {
 				logging.Errorf("Incorrect protocol provided %v", destination[1])
 				return fmt.Errorf("Incorrect protocol number provided %v", destination[1])
 			}
