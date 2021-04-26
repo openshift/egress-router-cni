@@ -317,7 +317,8 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 				return fmt.Errorf("Incorrect port number provided %v: %v", destination[0], err)
 			}
 
-			if !(strings.ToLower(destination[1]) == "tcp" || strings.ToLower(destination[1]) == "udp") {
+			protocol := strings.ToLower(destination[1])
+			if !(protocol == "tcp" || protocol == "udp" || protocol == "sctp") {
 				logging.Errorf("Incorrect protocol provided %v", destination[1])
 				return fmt.Errorf("Incorrect protocol number provided %v", destination[1])
 			}
@@ -330,12 +331,12 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 
 			if len(destination) == 4 && validatePortRange(destination[3]) == nil {
 				// should be <localport protocol IPaddress/mask remoteport> format
-				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
+				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", protocol, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
 				logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String()+":"+destination[3])
 				continue
 			}
 
-			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
+			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", protocol, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
 			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String())
 		} else {
 			logging.Errorf("Invalid destination provided %v", allowedDestination)

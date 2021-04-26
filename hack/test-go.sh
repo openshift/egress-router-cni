@@ -4,5 +4,6 @@
 set -e -x
 echo "Linting go code..."
 golint ./cmd ./pkg
+make verify
 echo "Running go tests..."
 go test -v -covermode=count -coverprofile=coverage.out ./...
