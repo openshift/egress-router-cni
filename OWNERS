@@ -1,10 +1,10 @@
 reviewers:
   - alexanderConstantinescu
   - astoycos
-  - danielmellado
   - danwinship
   - dcbw
   - jluhrsen
+  - msherif1234
   - rcarrillocruz
   - squeed
   - trozet
@@ -13,10 +13,10 @@ reviewers:
   - vpickard
   - weliang1
 approvers:
-  - danielmellado
   - danwinship
   - dcbw
   - knobunc
+  - msherif1234
   - rcarrillocruz
   - squeed
   - trozet
