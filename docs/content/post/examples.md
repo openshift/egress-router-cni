@@ -26,7 +26,7 @@ spec:
     "name": "egress-router-cni-net",
     "ip": {
       "addresses": [
-        "192.168.123.99"
+        "192.168.123.99/24"
         ],
       "destinations": [
         "192.168.123.91"
@@ -57,7 +57,7 @@ $ cat <<EOF > /etc/cni/multus/net.d/egress-router.conf
   "name": "egress-router-cni-net",
   "ip": {
     "addresses": [
-      "192.168.123.99"
+      "192.168.123.99/24"
       ],
     "destinations": [
       "192.168.123.91"

@@ -301,11 +301,7 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 		if len(destination) == 1 {
 			// should be <IPaddress/mask> format
 
-			dest, _, err := net.ParseCIDR(destination[0])
-			if err != nil {
-				logging.Errorf("Unable to parse destination IP address %v: %v", dest, err)
-				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest, err)
-			}
+			dest := net.ParseIP(destination[0])
 
 			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
 			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
@@ -323,11 +319,7 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 				return fmt.Errorf("Incorrect protocol number provided %v", proto)
 			}
 
-			dest, _, err := net.ParseCIDR(destination[2])
-			if err != nil {
-				logging.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
-				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
-			}
+			dest := net.ParseIP(destination[2])
 
 			if len(destination) == 4 && validatePortRange(destination[3]) == nil {
 				// should be <localport protocol IPaddress/mask remoteport> format
