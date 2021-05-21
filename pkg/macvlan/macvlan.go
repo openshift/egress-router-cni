@@ -301,11 +301,7 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 		if len(destination) == 1 {
 			// should be <IPaddress/mask> format
 
-			dest, _, err := net.ParseCIDR(destination[0])
-			if err != nil {
-				logging.Errorf("Unable to parse destination IP address %v: %v", dest, err)
-				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest, err)
-			}
+			dest := net.ParseIP(destination[0])
 
 			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
 			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
@@ -317,26 +313,23 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 				return fmt.Errorf("Incorrect port number provided %v: %v", destination[0], err)
 			}
 
-			if !(strings.ToLower(destination[1]) == "tcp" || strings.ToLower(destination[1]) == "udp") {
-				logging.Errorf("Incorrect protocol provided %v", destination[1])
-				return fmt.Errorf("Incorrect protocol number provided %v", destination[1])
+			proto := strings.ToLower(destination[1])
+			if !(proto == "tcp" || proto == "udp" || proto == "sctp") {
+				logging.Errorf("Incorrect protocol provided %v", proto)
+				return fmt.Errorf("Incorrect protocol number provided %v", proto)
 			}
 
-			dest, _, err := net.ParseCIDR(destination[2])
-			if err != nil {
-				logging.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
-				return fmt.Errorf("Unable to parse destination IP address %v: %v", dest.String(), err)
-			}
+			dest := net.ParseIP(destination[2])
 
 			if len(destination) == 4 && validatePortRange(destination[3]) == nil {
 				// should be <localport protocol IPaddress/mask remoteport> format
-				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
-				logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String()+":"+destination[3])
+				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", proto, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
+				logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", proto, destination[0], dest.String()+":"+destination[3])
 				continue
 			}
 
-			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", destination[1], "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
-			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", destination[1], destination[0], dest.String())
+			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", proto, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
+			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", proto, destination[0], dest.String())
 		} else {
 			logging.Errorf("Invalid destination provided %v", allowedDestination)
 			return fmt.Errorf("Invalid destination provided %v", allowedDestination)
