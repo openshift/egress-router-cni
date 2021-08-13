@@ -86,7 +86,7 @@ func configureIface(ifName string, res *current.Result) error {
 				// Read current sysctl value
 				value, err := sysctl.Sysctl(ipv6SysctlValueName)
 				if err != nil || value == "0" {
-					logging.Errorf("Unable to read sysctl value")
+					logging.Errorf("Unable to read sysctl value %s", ipv6SysctlValueName)
 					continue
 				}
 
@@ -376,13 +376,23 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 	gw := net.ParseIP(n.IP.Gateway)
 	allowedDestinations := n.IP.Destinations
 
+	isIPv6 := isIPv6CIDR(ipnet)
+
 	// Assume L2 interface only
 	result := &current.Result{CNIVersion: n.CNIVersion, Interfaces: []*current.Interface{macvlanInterface}}
-	result.IPs = append(result.IPs, &current.IPConfig{
-		Version: "4",
-		Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
-		Gateway: gw,
-	})
+	if isIPv6 {
+		result.IPs = append(result.IPs, &current.IPConfig{
+			Version: "6",
+			Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
+			Gateway: gw,
+		})
+	} else {
+		result.IPs = append(result.IPs, &current.IPConfig{
+			Version: "4",
+			Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
+			Gateway: gw,
+		})
+	}
 
 	for _, ipc := range result.IPs {
 		// All addresses apply to the container macvlan interface
@@ -403,16 +413,24 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Add route to gateway on macvlan interface
-		destIpNet := net.IPNet{
-			IP:   gw,
-			Mask: net.CIDRMask(32, 32),
+		var destIpNet net.IPNet
+		if isIPv6 {
+			destIpNet = net.IPNet{
+				IP:   gw,
+				Mask: net.CIDRMask(128, 128),
+			}
+			logging.Debugf("Adding IPv6 route to gateway %s on macvlan interface", gw)
+		} else {
+			destIpNet = net.IPNet{
+				IP:   gw,
+				Mask: net.CIDRMask(32, 32),
+			}
+			logging.Debugf("Adding IPv4 route to gateway %s on macvlan interface", gw)
 		}
-
 		newGatewayRoute := netlink.Route{
 			LinkIndex: macvlanLink.Attrs().Index,
 			Dst:       &destIpNet,
 		}
-		logging.Debugf("Adding route to gateway %s on macvlan interface", gw)
 
 		if err := netlink.RouteAdd(&newGatewayRoute); err != nil {
 			logging.Errorf("failed to add new gateway default route : %v", err)
@@ -427,7 +445,13 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Delete default route
-		routes, _ := netlink.RouteList(existingLink, netlink.FAMILY_V4)
+		var routes []netlink.Route
+		if isIPv6 {
+			routes, _ = netlink.RouteList(existingLink, netlink.FAMILY_V6)
+		} else {
+			routes, _ = netlink.RouteList(existingLink, netlink.FAMILY_V4)
+		}
+
 		for _, r := range routes {
 			if r.Dst == nil {
 				if err := netlink.RouteDel(&r); err != nil {
@@ -446,18 +470,22 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if err := netlink.RouteAdd(&newDefaultRoute); err != nil {
-			logging.Errorf("failed to add new default route : %v", err)
-			return fmt.Errorf("failed to add new default route : %v", err)
+			// Check if we already have route installed
+			if !os.IsExist(err) {
+				logging.Errorf("failed to add new default route, gw %v : %v", gw, err)
+				return fmt.Errorf("failed to add new default route, gw %v : %v", gw, err)
+			}
+			logging.Debugf("Use existing route with gateway %v", gw)
+		} else {
+			logging.Debugf("Added new default route with gateway %v", gw)
 		}
-		logging.Debugf("Added new default route with gateway %v", gw)
-
 		contVeth, err := net.InterfaceByName(args.IfName)
 		if err != nil {
 			return fmt.Errorf("failed to look up %q: %v", args.IfName, err)
 		}
 
 		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
+			if ipc.Version == "4" || ipc.Version == "6" {
 				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 			}
 		}
@@ -591,13 +619,13 @@ func CmdCheck(args *skel.CmdArgs) error {
 }
 
 func CmdAdd(args *skel.CmdArgs) error {
-	macvlanCmdAdd(args)
-
-	return nil
+	return macvlanCmdAdd(args)
 }
 
 func CmdDel(args *skel.CmdArgs) error {
-	macvlanCmdDel(args)
+	return macvlanCmdDel(args)
+}
 
-	return nil
+func isIPv6CIDR(cidr *net.IPNet) bool {
+	return cidr.IP != nil && cidr.IP.To4() == nil
 }
