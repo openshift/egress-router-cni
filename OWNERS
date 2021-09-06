@@ -1,7 +1,6 @@
 reviewers:
   - alexanderConstantinescu
   - astoycos
-  - danielmellado
   - danwinship
   - dcbw
   - jluhrsen
@@ -14,7 +13,6 @@ reviewers:
   - vpickard
   - weliang1
 approvers:
-  - danielmellado
   - danwinship
   - dcbw
   - knobunc
