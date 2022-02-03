@@ -1,17 +1,17 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.10 AS rhel8
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.11 AS rhel8
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.10 AS rhel7
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.11 AS rhel7
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
-FROM registry.ci.openshift.org/ocp/4.10:base
+FROM registry.ci.openshift.org/ocp/4.11:base
 RUN mkdir -p /usr/src/egress-router-cni/bin/ && \
     mkdir -p /usr/src/egress-router-cni/rhel7/bin && \
     mkdir -p /usr/src/egress-router-cni/rhel8/bin
