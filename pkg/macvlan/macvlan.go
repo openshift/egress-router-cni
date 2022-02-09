@@ -490,7 +490,13 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		ipt, err := iptables.New()
+		var ipt *iptables.IPTables
+		if isIPv6 {
+			ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv6)
+		} else {
+			ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
+		}
+
 		if err != nil {
 			logging.Errorf("failed to get IPTables: %v", err)
 			return fmt.Errorf("failed to get IPTables: %v", err)
