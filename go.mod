@@ -13,6 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.6.1
 	github.com/vishvananda/netlink v1.0.0
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
 	k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90
 )
