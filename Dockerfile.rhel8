@@ -1,23 +1,24 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.20-openshift-4.14 AS rhel8
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.19-openshift-4.13 AS rhel9
+ADD . /go/src/github.com/openshift/egress-router-cni
+WORKDIR /go/src/github.com/openshift/egress-router-cni
+ENV GO111MODULE=on
+ENV VERSION=rhel9 COMMIT=unset
+RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
+
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.19-openshift-4.13 AS rhel8
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.20-openshift-4.14 AS rhel7
-ADD . /go/src/github.com/openshift/egress-router-cni
-WORKDIR /go/src/github.com/openshift/egress-router-cni
-ENV GO111MODULE=on
-RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
-
-FROM registry.ci.openshift.org/ocp/4.14:base
+FROM registry.ci.openshift.org/ocp/4.13:base
 RUN mkdir -p /usr/src/egress-router-cni/bin/ && \
-    mkdir -p /usr/src/egress-router-cni/rhel7/bin && \
-    mkdir -p /usr/src/egress-router-cni/rhel8/bin
-COPY --from=rhel7 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel7/bin/egress-router
-COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
+    mkdir -p /usr/src/egress-router-cni/rhel8/bin && \
+    mkdir -p /usr/src/egress-router-cni/rhel9/bin
 COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel8/bin/egress-router
+COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
+COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel9/bin/egress-router
 LABEL io.k8s.display-name="Egress Router CNI" \
       io.k8s.description="CNI Plugin for Egress Router" \
       io.openshift.tags="openshift" \
