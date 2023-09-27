@@ -3,7 +3,6 @@ package macvlan
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/egress-router-cni/pkg/util"
 	"net"
 	"os"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/j-keck/arping"
+	"github.com/openshift/egress-router-cni/pkg/util"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -442,6 +442,17 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			logging.Errorf("couldn't get interface eth0: %v", err)
 			return fmt.Errorf("couldn't get interface eth0: %v", err)
+		}
+
+		// Enable IP forwarding
+		ipFamily := "ipv4"
+		if isIPv6 {
+			ipFamily = "ipv6"
+		}
+		_, err = sysctl.Sysctl(fmt.Sprintf("net.%s.ip_forward", ipFamily), "1")
+		if err != nil {
+			logging.Errorf("failed to enable %s forwarding: %v", ipFamily, err)
+			return fmt.Errorf("failed to enable %s forwarding: %v", ipFamily, err)
 		}
 
 		// Delete default route
