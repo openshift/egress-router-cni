@@ -5,7 +5,7 @@ ENV GO111MODULE=on
 ENV VERSION=rhel8 COMMIT=unset
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.16-openshift-4.9 AS rhel7
+FROM registry.ci.openshift.org/ocp/builder:rhel-7-golang-1.16-openshift-4.9 AS rhel7
 ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
