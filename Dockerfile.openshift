@@ -12,7 +12,8 @@ ENV GO111MODULE=on
 RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
 
 FROM registry.ci.openshift.org/ocp/4.16:base-rhel9
-RUN mkdir -p /usr/src/egress-router-cni/bin/ && \
+RUN dnf install -y util-linux && dnf clean all && \
+    mkdir -p /usr/src/egress-router-cni/bin/ && \
     mkdir -p /usr/src/egress-router-cni/rhel8/bin && \
     mkdir -p /usr/src/egress-router-cni/rhel9/bin
 COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
