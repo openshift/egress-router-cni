@@ -1,6 +1,7 @@
 package macvlan
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -221,7 +222,7 @@ func loadIPConfig(ipc *types.IPConfig, podNamespace string) (*types.IP, map[stri
 		return nil, nil, fmt.Errorf("failed to get Kubernetes clientset")
 	}
 
-	cm, err := clientset.CoreV1().ConfigMaps(ipc.Namespace).Get(ipc.Name, metav1.GetOptions{})
+	cm, err := clientset.CoreV1().ConfigMaps(ipc.Namespace).Get(context.TODO(), ipc.Name, metav1.GetOptions{})
 	if err != nil {
 		logging.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
 		return nil, nil, fmt.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
