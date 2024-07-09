@@ -1,4 +1,4 @@
-FROM golang:1.15
+FROM golang:1.22
 ADD . /usr/src/egress-router-cni
 RUN mkdir -p $GOPATH/src/github.com/openshift/egress-router-cni
 WORKDIR $GOPATH/src/github.com/openshift/egress-router-cni
