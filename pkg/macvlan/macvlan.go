@@ -15,13 +15,13 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
-	"github.com/coreos/go-iptables/iptables"
 	"github.com/j-keck/arping"
 	"github.com/openshift/egress-router-cni/pkg/util"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/knftables"
 
 	"github.com/openshift/egress-router-cni/pkg/logging"
 	"github.com/openshift/egress-router-cni/pkg/types"
@@ -286,28 +286,25 @@ func validatePortRange(port string) error {
 	return nil
 }
 
-// generateDNATIPTablesRules creates the necessary IPTable rules to DNAT packets to remote destination.
+// generateDNATNFTablesRules creates the necessary NFTables rules to DNAT packets to remote destination.
 // Accepts an array of strings repsenting allowedDestinations to which the router can talk to.
 // Returns an error if invalid user input is detected at any point.
-func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []string) error {
+func generateDNATNFTablesRules(tx *knftables.Transaction, allowedDestinations []string) error {
 	if len(allowedDestinations) == 0 {
 		logging.Debugf("No destination information has been provided")
 		return nil
 	}
 
 	for _, allowedDestination := range allowedDestinations {
-
 		destination := strings.Split(allowedDestination, " ")
+		var rule string
 
 		if len(destination) == 1 {
-			// should be <IPaddress/mask> format
-
-			dest := net.ParseIP(destination[0])
-
-			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-j", "DNAT", "--to-destination", dest.String())
-			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -j DNAT --to-destination %s", dest.String())
+			// should be <IPaddress> format
+			dest := net.ParseIP(destination[0]).String()
+			rule = fmt.Sprintf("iif eth0 dnat to %s", dest)
 		} else if len(destination) == 3 || len(destination) == 4 {
-			// should be <localport protocol IPaddress/mask> format
+			// should be <localport protocol IPaddress [remoteport]> format
 
 			if err := validatePortRange(destination[0]); err != nil {
 				logging.Errorf("Incorrect port number provided %v: %v", destination[0], err)
@@ -320,22 +317,29 @@ func generateDNATIPTablesRules(ipt *iptables.IPTables, allowedDestinations []str
 				return fmt.Errorf("Incorrect protocol number provided %v", proto)
 			}
 
-			dest := net.ParseIP(destination[2])
+			dest := net.ParseIP(destination[2]).String()
 
-			if len(destination) == 4 && validatePortRange(destination[3]) == nil {
-				// should be <localport protocol IPaddress/mask remoteport> format
-				ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", proto, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String()+":"+destination[3])
-				logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", proto, destination[0], dest.String()+":"+destination[3])
-				continue
+			if len(destination) == 4 {
+				if err := validatePortRange(destination[3]); err != nil {
+					logging.Errorf("Incorrect port number provided %v: %v", destination[3], err)
+					return fmt.Errorf("Incorrect port number provided %v: %v", destination[3], err)
+				}
+				dest += ":" + destination[3]
 			}
 
-			ipt.Append("nat", "PREROUTING", "-i", "eth0", "-p", proto, "--dport", destination[0], "-j", "DNAT", "--to-destination", dest.String())
-			logging.Debugf("Added iptables rule: iptables -t nat PREROUTING -i eth0 -p %s --dport %s -j DNAT --to-destination %s", proto, destination[0], dest.String())
+			rule = fmt.Sprintf("iif eth0 %s dport %s dnat to %s", proto, destination[0], dest)
 		} else {
 			logging.Errorf("Invalid destination provided %v", allowedDestination)
 			return fmt.Errorf("Invalid destination provided %v", allowedDestination)
 		}
+
+		tx.Add(&knftables.Rule{
+			Chain: "prerouting",
+			Rule:  rule,
+		})
+		logging.Debugf("Added nftables rule: %s", rule)
 	}
+
 	return nil
 }
 
@@ -502,25 +506,50 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		var ipt *iptables.IPTables
+		var nft knftables.Interface
 		if isIPv6 {
-			ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv6)
+			nft, err = knftables.New(knftables.IPv6Family, "egress_cni")
 		} else {
-			ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
+			nft, err = knftables.New(knftables.IPv4Family, "egress_cni")
 		}
-
 		if err != nil {
-			logging.Errorf("failed to get IPTables: %v", err)
-			return fmt.Errorf("failed to get IPTables: %v", err)
+			logging.Errorf("failed to get NFTables: %v", err)
+			return fmt.Errorf("failed to get NFTables: %v", err)
 		}
 
-		if err := generateDNATIPTablesRules(ipt, allowedDestinations); err != nil {
+		tx := nft.NewTransaction()
+		tx.Add(&knftables.Table{})
+		tx.Flush(&knftables.Table{})
+		tx.Add(&knftables.Chain{
+			Name: "prerouting",
+
+			Type:     knftables.PtrTo(knftables.NATType),
+			Hook:     knftables.PtrTo(knftables.PreroutingHook),
+			Priority: knftables.PtrTo(knftables.DNATPriority),
+		})
+		tx.Add(&knftables.Chain{
+			Name: "postrouting",
+
+			Type:     knftables.PtrTo(knftables.NATType),
+			Hook:     knftables.PtrTo(knftables.PostroutingHook),
+			Priority: knftables.PtrTo(knftables.SNATPriority),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: "postrouting",
+			Rule: knftables.Concat(
+				"oif", args.IfName, "snat to", ip.String(),
+			),
+		})
+
+		if err := generateDNATNFTablesRules(tx, allowedDestinations); err != nil {
 			logging.Errorf("Invalid destination %v: %v", allowedDestinations, err)
 			return fmt.Errorf("Invalid destination %v: %v", allowedDestinations, err)
 		}
-		ipt.Append("nat", "POSTROUTING", "-o", args.IfName, "-j", "SNAT", "--to-source", ip.String())
-		logging.Debugf("Added iptables rule: iptables -t nat -o %s -j SNAT --to-source %s", args.IfName, ip.String())
 
+		if err := nft.Run(context.Background(), tx); err != nil {
+			logging.Errorf("Failed to set nftables rules: %v", err)
+			return fmt.Errorf("failed to set nftables rules: %v", err)
+		}
 		return nil
 	})
 	if err != nil {

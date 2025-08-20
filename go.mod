@@ -7,7 +7,6 @@ toolchain go1.22.2
 require (
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.7
-	github.com/coreos/go-iptables v0.4.5
 	github.com/j-keck/arping v1.0.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.31.0
@@ -17,9 +16,11 @@ require (
 	github.com/vishvananda/netlink v1.0.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/client-go v0.30.0
+	sigs.k8s.io/knftables v0.0.18
 )
 
 require (
+	github.com/coreos/go-iptables v0.4.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect

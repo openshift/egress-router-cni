@@ -21,5 +21,4 @@ COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-rout
 COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel8/bin/egress-router
 LABEL io.k8s.display-name="Egress Router CNI" \
       io.k8s.description="CNI Plugin for Egress Router" \
-      io.openshift.tags="openshift" \
-      maintainer="Daniel Mellado <dmellado@redhat.com>"
+      io.openshift.tags="openshift"
