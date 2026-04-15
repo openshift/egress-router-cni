@@ -1,24 +1,21 @@
 reviewers:
-  - alexanderConstantinescu
-  - astoycos
+  - arghosh93
+  - arkadeepsen
+  - bpickard22
   - danwinship
-  - dcbw
+  - jcaamano
   - jluhrsen
-  - msherif1234
-  - rcarrillocruz
-  - squeed
-  - trozet
+  - kyrtapz
+  - martinkennelly
+  - marty-power
+  - mattedallo
+  - miheer
+  - pperiyasamy
+  - taanyas
   - tssurya
-  - vjayaramrh
-  - vpickard
   - weliang1
 approvers:
   - danwinship
-  - dcbw
   - knobunc
-  - msherif1234
-  - rcarrillocruz
-  - squeed
-  - trozet
   - tssurya
 component: "Networking"
