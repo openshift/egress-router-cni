@@ -3,7 +3,7 @@ ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV VERSION=rhel9 COMMIT=unset
-RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
+RUN go build -mod vendor -ldflags '-s -w' -o bin/egress-router cmd/egress-router/egress-router.go
 
 FROM registry.ci.openshift.org/ocp/4.19:base-rhel9
 RUN dnf install -y util-linux && dnf clean all && \
