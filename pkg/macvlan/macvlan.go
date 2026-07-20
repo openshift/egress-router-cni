@@ -11,7 +11,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
@@ -78,7 +78,7 @@ func configureIface(ifName string, res *current.Result) error {
 
 		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
 		// an IPv6 address to the interface
-		if !has_enabled_ipv6 && ipc.Version == "6" {
+		if !has_enabled_ipv6 && ipc.Address.IP.To4() == nil {
 			// Enabled IPv6 for loopback "lo" and the interface
 			// being configured
 			for _, iface := range [2]string{"lo", ifName} {
@@ -385,19 +385,10 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 
 	// Assume L2 interface only
 	result := &current.Result{CNIVersion: n.CNIVersion, Interfaces: []*current.Interface{macvlanInterface}}
-	if isIPv6 {
-		result.IPs = append(result.IPs, &current.IPConfig{
-			Version: "6",
-			Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
-			Gateway: gw,
-		})
-	} else {
-		result.IPs = append(result.IPs, &current.IPConfig{
-			Version: "4",
-			Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
-			Gateway: gw,
-		})
-	}
+	result.IPs = append(result.IPs, &current.IPConfig{
+		Address: net.IPNet{IP: ip, Mask: ipnet.Mask},
+		Gateway: gw,
+	})
 
 	for _, ipc := range result.IPs {
 		// All addresses apply to the container macvlan interface
@@ -501,9 +492,7 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		}
 
 		for _, ipc := range result.IPs {
-			if ipc.Version == "4" || ipc.Version == "6" {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
-			}
+			_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 		}
 
 		var nft knftables.Interface
