@@ -18,9 +18,6 @@ import (
 	"github.com/j-keck/arping"
 	"github.com/openshift/egress-router-cni/pkg/util"
 	"github.com/vishvananda/netlink"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/knftables"
 
 	"github.com/openshift/egress-router-cni/pkg/logging"
@@ -204,51 +201,6 @@ func fillNetConfDefaults(conf *types.NetConf, cluster *types.ClusterConf) error 
 	}
 
 	return nil
-}
-
-func loadIPConfig(ipc *types.IPConfig, podNamespace string) (*types.IP, map[string]types.IP, error) {
-	if ipc.Namespace == "" {
-		ipc.Namespace = podNamespace
-	}
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		logging.Errorf("failed to get in-cluster config")
-		return nil, nil, fmt.Errorf("failed to get in-cluster config")
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		logging.Errorf("failed to get Kubernetes clientset")
-		return nil, nil, fmt.Errorf("failed to get Kubernetes clientset")
-	}
-
-	cm, err := clientset.CoreV1().ConfigMaps(ipc.Namespace).Get(context.TODO(), ipc.Name, metav1.GetOptions{})
-	if err != nil {
-		logging.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
-		return nil, nil, fmt.Errorf("failed to get ConfigMap on namespace %s with name %s", ipc.Namespace, ipc.Name)
-	}
-
-	if cm.Data["ip"] != "" {
-		if cm.Data["podIP"] != "" {
-			logging.Errorf("ConfigMap %s/%s contains both 'ip' and 'podIP'", ipc.Namespace, ipc.Name)
-			return nil, nil, fmt.Errorf("ConfigMap %s/%s contains both 'ip' and 'podIP'", ipc.Namespace, ipc.Name)
-		}
-		ip := &types.IP{}
-		if err := json.Unmarshal([]byte(cm.Data["ip"]), ip); err != nil {
-			logging.Errorf("failed to parse 'ip' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
-			return nil, nil, fmt.Errorf("failed to parse 'ip' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
-		}
-		return ip, nil, nil
-	} else if cm.Data["podIP"] != "" {
-		podIP := map[string]types.IP{}
-		if err := json.Unmarshal([]byte(cm.Data["podIP"]), &podIP); err != nil {
-			logging.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
-			return nil, nil, fmt.Errorf("failed to parse 'podIP' in ConfigMap %s/%s: %v", ipc.Namespace, ipc.Name, err)
-		}
-		return nil, podIP, nil
-	} else {
-		return nil, nil, fmt.Errorf("ConfigMap %s/%s contains neither 'ip' nor 'podIP'", ipc.Namespace, ipc.Name)
-	}
 }
 
 func macvlanCmdDel(args *skel.CmdArgs) error {
