@@ -3,7 +3,8 @@ ADD . /go/src/github.com/openshift/egress-router-cni
 WORKDIR /go/src/github.com/openshift/egress-router-cni
 ENV GO111MODULE=on
 ENV VERSION=rhel9 COMMIT=unset
-RUN go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
+RUN go mod vendor && go build -mod vendor -o bin/egress-router cmd/egress-router/egress-router.go
+RUN make build-e2e-tests && gzip -9 test/bin/egress-router-cni-tests-ext
 
 FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.23-openshift-4.19 AS rhel8
 ADD . /go/src/github.com/openshift/egress-router-cni
@@ -19,6 +20,7 @@ RUN dnf install -y util-linux && dnf clean all && \
 COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/bin/egress-router
 COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel9/bin/egress-router
 COPY --from=rhel8 /go/src/github.com/openshift/egress-router-cni/bin/egress-router /usr/src/egress-router-cni/rhel8/bin/egress-router
+COPY --from=rhel9 /go/src/github.com/openshift/egress-router-cni/test/bin/egress-router-cni-tests-ext.gz /usr/bin/egress-router-cni-tests-ext.gz
 LABEL io.k8s.display-name="Egress Router CNI" \
       io.k8s.description="CNI Plugin for Egress Router" \
       io.openshift.tags="openshift"
