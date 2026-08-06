@@ -16,9 +16,8 @@ type NetConf struct {
 	InterfaceType string            `json:"interfaceType"`
 	InterfaceArgs map[string]string `json:"interfaceArgs"`
 
-	IP       *IP           `json:"ip"`
-	PodIP    map[string]IP `json:"podIP"`
-	IPConfig *IPConfig     `json:"ipConfig"`
+	IP    *IP           `json:"ip"`
+	PodIP map[string]IP `json:"podIP"`
 
 	LogFile  string `json:"log_file,omitempty"`
 	LogLevel string `json:"log_level.omitempty"`
@@ -29,11 +28,4 @@ type IP struct {
 	Addresses    []string `json:"addresses"`
 	Gateway      string   `json:"gateway"`
 	Destinations []string `json:"destinations"`
-}
-
-// IPConfig sets additional config for the Egress Router CNI
-type IPConfig struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Overrides *IP    `json:"overrides"`
 }
