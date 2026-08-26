@@ -393,14 +393,16 @@ func macvlanCmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Enable IP forwarding
-		ipFamily := "ipv4"
+		var sysctlKey string
 		if isIPv6 {
-			ipFamily = "ipv6"
+			sysctlKey = "net.ipv6.conf.all.forwarding"
+		} else {
+			sysctlKey = "net.ipv4.ip_forward"
 		}
-		_, err = sysctl.Sysctl(fmt.Sprintf("net.%s.ip_forward", ipFamily), "1")
+		_, err = sysctl.Sysctl(sysctlKey, "1")
 		if err != nil {
-			logging.Errorf("failed to enable %s forwarding: %v", ipFamily, err)
-			return fmt.Errorf("failed to enable %s forwarding: %v", ipFamily, err)
+			logging.Errorf("failed to enable forwarding (%s): %v", sysctlKey, err)
+			return fmt.Errorf("failed to enable forwarding (%s): %v", sysctlKey, err)
 		}
 
 		// Delete default route
