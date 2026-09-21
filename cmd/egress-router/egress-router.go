@@ -17,11 +17,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	macvlan.CmdAdd(args)
-	return nil
+	return macvlan.CmdAdd(args)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	macvlan.CmdDel(args)
-	return nil
+	return macvlan.CmdDel(args)
 }
